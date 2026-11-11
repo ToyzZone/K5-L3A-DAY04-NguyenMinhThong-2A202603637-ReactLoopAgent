@@ -22,6 +22,7 @@ def run_agent(question, provider, tools, max_steps=6):
     system_prompt = getattr(tools,'system_prompt', SYSTEM_PROMPT)
     schemas = getattr(tools,'schemas', SCHEMAS)
     trace, usage = [], []
+    seen_urls = set()
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": question}]
@@ -64,6 +65,7 @@ def run_agent(question, provider, tools, max_steps=6):
         except Exception as e:
             return run('error', error=f'{type(e).__name__}: {e}')
         usage.append(response['usage'])
+
         trace.append({'event': 'model', 'step': step,
                     'finish': response['finish'],
                     'calls': len(response.get('calls', []))})
@@ -85,7 +87,8 @@ def run_agent(question, provider, tools, max_steps=6):
                 result = tools.execute(call['name'], args)
             except (json.JSONDecodeError, TypeError) as e:
                 result = {'ok': False, 'error': 'INVALID_ARGUMENTS', 'message': str(e)}
-                
+            if call['name'] == 'get_incident_details' and result.get('ok'):
+                seen_urls.add(result['url'])
             trace.append({'event': 'tool', 'step': step, 'call_id': call['id'],
                         'name': call['name'], 'arguments': call['arguments'],
                         'result': result})
