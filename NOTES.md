@@ -26,10 +26,10 @@ Dán đoạn trace chứng minh lỗi và nêu nguyên nhân có thể xảy ra.
 
 | Chỉ số | `eval_before.json` | `eval_after.json` |
 |---|---|---|
-| Điểm tổng |  |  |
+| Điểm tổng | 92.0 (22/22 case được chấm) |  |
 | Điểm case đã chọn |  |  |
-| Số model calls |  |  |
-| Token, chi phí nếu có |  |  |
+| Số model calls | 61 (agent, tổng 22 case) |  |
+| Token, chi phí nếu có | Agent 69.739 (prompt 55.812, completion 13.927); judge 55.029 |  |
 
 - Lỗi đã giải quyết:
 - Lỗi còn lại hoặc mới xuất hiện:
