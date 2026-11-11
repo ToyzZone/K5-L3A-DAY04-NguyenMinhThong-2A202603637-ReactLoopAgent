@@ -65,13 +65,16 @@ def run_agent(question, provider, tools, max_steps=6):
             return run('error', error=f'{type(e).__name__}: {e}')
         usage.append(response['usage'])
         trace.append({'event': 'model', 'step': step,
-                      'finish': response['finish'],
-                      'calls': len(response.get('calls', []))})
+                    'finish': response['finish'],
+                    'calls': len(response.get('calls', []))})
         messages.append(response['message'])
         
     #B3 
     #CP2
         calls = response.get('calls', [])
+        #4a
+        if response['finish'] == 'length':
+            return run('error', error='MODEL_RAN_OUT_OF_TOKENS')
         if not calls:
             return run('completed', answer=response['message'].get('content') or '')
         for call in calls:
@@ -82,8 +85,8 @@ def run_agent(question, provider, tools, max_steps=6):
                 result = {'ok': False, 'error': 'INVALID_ARGUMENTS', 'message': str(e)}
                 
             trace.append({'event': 'tool', 'step': step, 'call_id': call['id'],
-                          'name': call['name'], 'arguments': call['arguments'],
-                          'result': result})
+                        'name': call['name'], 'arguments': call['arguments'],
+                        'result': result})
             
             messages.append({'role': 'tool',
                             'content': json.dumps(result, ensure_ascii=False), 
