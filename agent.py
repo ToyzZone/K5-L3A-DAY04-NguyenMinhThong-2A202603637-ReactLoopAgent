@@ -68,6 +68,27 @@ def run_agent(question, provider, tools, max_steps=6):
                       'finish': response['finish'],
                       'calls': len(response.get('calls', []))})
         messages.append(response['message'])
+        
+    #B3 
+    #CP2
+        calls = response.get('calls', [])
+        if not calls:
+            return run('completed', answer=response['message'].get('content') or '')
+        for call in calls:
+            try:
+                args = json.loads(call['arguments'])
+                result = tools.execute(call['name'], args)
+            except (json.JSONDecodeError, TypeError) as e:
+                result = {'ok': False, 'error': 'INVALID_ARGUMENTS', 'message': str(e)}
+                
+            trace.append({'event': 'tool', 'step': step, 'call_id': call['id'],
+                          'name': call['name'], 'arguments': call['arguments'],
+                          'result': result})
+            
+            messages.append({'role': 'tool',
+                            'content': json.dumps(result, ensure_ascii=False), 
+                            'tool_call_id': call['id']})
+            
     return run('max_steps')
 
 
