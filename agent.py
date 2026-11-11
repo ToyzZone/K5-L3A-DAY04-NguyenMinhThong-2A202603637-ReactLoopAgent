@@ -76,7 +76,9 @@ def run_agent(question, provider, tools, max_steps=6):
         if response['finish'] == 'length':
             return run('error', error='MODEL_RAN_OUT_OF_TOKENS')
         if not calls:
-            return run('completed', answer=response['message'].get('content') or '')
+            if response['finish'] == 'stop':
+                return run('completed', answer=response['message'].get('content') or '')
+            return run('error', error=f'UNEXPECTED_FINISH_REASON: {response["finish"]}')
         for call in calls:
             try:
                 args = json.loads(call['arguments'])
