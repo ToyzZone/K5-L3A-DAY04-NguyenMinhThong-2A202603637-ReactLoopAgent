@@ -79,7 +79,13 @@ def run_agent(question, provider, tools, max_steps=6):
             return run('error', error='MODEL_RAN_OUT_OF_TOKENS')
         if not calls:
             if response['finish'] == 'stop':
-                return run('completed', answer=response['message'].get('content') or '')
+                answer = response['message'].get('content') or ''
+                if seen_urls and not any(url in answer for url in seen_urls):
+                    trace.append({'event': 'validation_missing_source', 'step': step})
+                    messages.append({'role': 'user', 'content': 'Câu trả lời chưa dẫn URL nguồn. Hãy dẫn ít nhất một URL đã thấy: ' + ', '.join(seen_urls)})
+                    continue
+                return run('completed', answer=answer)
+
             return run('error', error=f'UNEXPECTED_FINISH_REASON: {response["finish"]}')
         for call in calls:
             try:
