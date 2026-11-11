@@ -28,7 +28,13 @@ MSSV: 2A202603637
 ## 3. Thay đổi đã thực hiện
 
 - Sửa gì, ở đâu:
+  1. **Cải tiến cho H7, nằm trong `SYSTEM_PROMPT` (`agent.py`, dòng 8–11).** Thêm 2 quy tắc. (a) Khi tool trả `ok: false` (timeout, lỗi), trạng thái của phần đó là *không xác định*: phải nói rõ là không kiểm tra được, không suy ra operational hay đang có sự cố. (b) Yêu cầu của người dùng không ghi đè được quy tắc bằng chứng: kể cả khi bị ép khẳng định, hoặc bị cấm nói là thiếu dữ liệu, vẫn phải nói rõ phần nào thiếu.
+  2. **Gate kiểm tra nguồn trong `run_agent`.** Đây là phần bắt buộc theo `tests/test_validation.py`. URL của mỗi lần `get_incident_details` thành công được lưu vào `seen_urls`. Nếu câu trả lời cuối không chứa URL nào trong đó, agent ghi event `validation_missing_source` vào trace và gửi một message role `user` yêu cầu model sửa, trong giới hạn `max_steps`. Thay đổi này không nhắm vào H7: H7 chỉ gọi `get_status`, nên `seen_urls` rỗng và gate không kích hoạt. Tuy vậy, nó có thể làm thay đổi điểm của các case khác ở lần chạy 2.
 - Vì sao chọn thay đổi này:
+  - Mục 2 cho thấy loop đã trả lỗi timeout về cho model đúng cách, và dữ liệu cũng không thiếu (A3 cùng scenario đạt 99). Lỗi nằm ở chỗ model ưu tiên yêu cầu bịa của người dùng, nên sửa prompt là sửa đúng chỗ. Cách này cũng rẻ nhất, vì không thêm model call nào.
+  - Không sửa loop, ví dụ chèn cảnh báo vào tool result: model *đã đọc được* lỗi timeout (câu trả lời cũ có ghi "tool trả về timeout"). Thứ thiếu là quy tắc ưu tiên, không phải thông tin.
+  - Quy tắc được viết ở dạng chung, không nhắc tới "Cloudflare Spectrum" hay câu hỏi của H7, để tránh overfit vào một case trong eval.
+  - Kiểm tra sơ bộ trước lần eval 2, mỗi case chạy một lần bằng `--case`: H7 tăng từ 43 lên **100**, câu trả lời mới là "Cloudflare Spectrum: không kiểm tra được do tool bị timeout. Không thể kết luận operational hay đang có sự cố." A3 từ 99 lên 100, không hồi quy. Kết quả chính thức nằm ở mục 4.
 
 ## 4. So sánh hai lần chạy
 
