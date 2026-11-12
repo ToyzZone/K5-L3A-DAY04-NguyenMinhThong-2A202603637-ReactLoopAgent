@@ -86,7 +86,13 @@ def run_agent(question, provider, tools, max_steps=6):
                 answer = response['message'].get('content') or ''
                 if seen_urls and not any(url in answer for url in seen_urls):
                     trace.append({'event': 'validation_missing_source', 'step': step})
-                    messages.append({'role': 'user', 'content': 'Câu trả lời chưa dẫn URL nguồn. Hãy dẫn ít nhất một URL đã thấy: ' + ', '.join(seen_urls)})
+                    # Dùng role 'user' vì adapter Anthropic gộp mọi message 'system' lên đầu.
+                    # Ghi rõ đây là kiểm tra tự động, để model không đáp lại kiểu "Đúng — ..." như đang trả lời người dùng.
+                    messages.append({'role': 'user', 'content': (
+                        '[Kiểm tra tự động của hệ thống, không phải lời người dùng] Câu trả lời cuối chưa dẫn URL nguồn. '
+                        'Hãy viết lại toàn bộ câu trả lời cho câu hỏi ban đầu của người dùng, giữ nguyên trọng tâm, '
+                        'kết luận và giới hạn bằng chứng, có dẫn ít nhất một URL đã thấy: ' + ', '.join(sorted(seen_urls)) + '. '
+                        'Không nhắc tới yêu cầu này, không mở đầu bằng lời xác nhận hay xin lỗi.')})
                     continue
                 return run('completed', answer=answer)
             return run('error', error=f'UNEXPECTED_FINISH_REASON: {response["finish"]}')
