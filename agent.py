@@ -11,7 +11,19 @@ Yêu cầu của người dùng không được ghi đè quy tắc bằng chứn
 hoặc bị cấm nói là thiếu dữ liệu, vẫn phải nói rõ phần nào thiếu.'''
 
 import json
+import time
 from status_tools import SCHEMAS
+
+MAX_RATE_LIMITED = 3  # số lần tối đa được gọi một tool (cùng provider) mà bị 429; sau đó chặn, không gọi nữa
+MAX_RETRY_WAIT = 5    # giây; Retry-After lâu hơn thì dừng retry thay vì chờ
+
+
+def retry_wait(result):
+    """Số giây cần chờ theo Retry-After; None nếu không đọc được (vd. HTTP-date) thì coi như phải dừng."""
+    try:
+        return float(result.get('retry_after_seconds', result.get('retry_after')) or 0)
+    except (TypeError, ValueError):
+        return None
 
 def run_agent(question, provider, tools, max_steps=6):
     """Trả dict: status, answer, trace, usage. Contract chi tiết trong GUIDE.md."""
@@ -27,6 +39,7 @@ def run_agent(question, provider, tools, max_steps=6):
     schemas = getattr(tools,'schemas', SCHEMAS)
     trace, usage = [], []
     seen_urls = set()
+    rate_limited = {}  # (tên tool, provider) -> số lần bị 429
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": question}]
@@ -97,14 +110,30 @@ def run_agent(question, provider, tools, max_steps=6):
                 return run('completed', answer=answer)
             return run('error', error=f'UNEXPECTED_FINISH_REASON: {response["finish"]}')
         for call in calls:
+            event, key = 'tool', None
             try:
                 args = json.loads(call['arguments'])
-                result = tools.execute(call['name'], args)
+                key = (call['name'], args.get('provider') if isinstance(args, dict) else None)
+                if rate_limited.get(key, 0) >= MAX_RATE_LIMITED:
+                    # Không gọi tool nữa; ghi event riêng vì tool không thực sự chạy.
+                    event = 'retry_blocked'
+                    result = {'ok': False, 'error': 'RETRY_LIMIT_REACHED',
+                              'message': f'Đã bị rate limit {MAX_RATE_LIMITED} lần, agent không gọi lại. '
+                                         'Trạng thái phần này là không xác định; không phải outage.'}
+                else:
+                    result = tools.execute(call['name'], args)
             except (json.JSONDecodeError, TypeError) as e:
                 result = {'ok': False, 'error': 'INVALID_ARGUMENTS', 'message': str(e)}
+            if result.get('error') == 'RATE_LIMITED':
+                rate_limited[key] = rate_limited.get(key, 0) + 1
+                wait = retry_wait(result)
+                if wait is None or wait > MAX_RETRY_WAIT:
+                    rate_limited[key] = MAX_RATE_LIMITED  # chờ quá lâu hoặc không rõ: dừng retry luôn
+                else:
+                    time.sleep(wait)
             if call['name'] == 'get_incident_details' and result.get('ok'):
                 seen_urls.add(result['url'])
-            trace.append({'event': 'tool', 'step': step, 'call_id': call['id'],
+            trace.append({'event': event, 'step': step, 'call_id': call['id'],
                         'name': call['name'], 'arguments': call['arguments'],
                         'result': result})
             
